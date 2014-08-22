@@ -19,18 +19,11 @@ d3.json("service1.json", function(data) {
 
     overlay.draw = function() {
       var projection = this.getProjection();
+
       var transform = function (d) {
         d = new google.maps.LatLng(d.lat, d.lng);
         d = projection.fromLatLngToDivPixel(d);
-
         return d;
-      };
-
-      var setPoint = function (d) {
-        d = transform(d);
-        return d3.select(this)
-              .style("left", (d.x-20) + "px")
-              .style("top", (d.y-20) + "px");
       };
 
       var routes = layer.selectAll("div").data(data).enter()
@@ -48,7 +41,7 @@ d3.json("service1.json", function(data) {
       var marker = routes.selectAll()
           .data(function (d) { return d.points; })
         .enter().append("svg:circle")
-          .attr("r", 4.5)
+          .attr("r", 3)
           .attr("cx", function (d) { return transform(d).x; })
           .attr("cy", function (d) { return transform(d).y; });
     };
