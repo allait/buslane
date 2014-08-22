@@ -13,7 +13,9 @@ d3.json("service1.json", function(data) {
   var overlay = new google.maps.OverlayView();
 
   overlay.onAdd = function() {
-    var layer = d3.select(this.getPanes().overlayLayer).append("div").attr("class", "stations");
+    var layer = d3.select(this.getPanes().overlayLayer)
+                  .append("div").attr("class", "overlay")
+                    .append("svg:svg");
 
     overlay.draw = function() {
       var projection = this.getProjection();
@@ -31,7 +33,8 @@ d3.json("service1.json", function(data) {
               .style("top", (d.y-20) + "px");
       };
 
-      var routes = layer.selectAll("div").data(data).enter().append("div").attr("class", "service");
+      var routes = layer.selectAll("div").data(data).enter()
+                        .append("svg:g").attr("class", "route");
 
       var line = d3.svg.line()
           .x(function(d) { return transform(d).x; })
@@ -39,20 +42,15 @@ d3.json("service1.json", function(data) {
           .interpolate("linear");
 
       var route_line = routes.selectAll()
-          .append("svg:svg")
-          .append("svg:path")
-          .data(function (d) { return [d.points]; })
-              .attr("d", line);
+          .data(function (d) { return [d.points]; }).enter()
+          .append("svg:path").attr("d", line);
 
       var marker = routes.selectAll()
           .data(function (d) { return d.points; })
-        .enter().append("svg:svg")
-          .each(setPoint);
-
-      marker.append("svg:circle")
+        .enter().append("svg:circle")
           .attr("r", 4.5)
-          .attr("cx", 20)
-          .attr("cy", 20);
+          .attr("cx", function (d) { return transform(d).x; })
+          .attr("cy", function (d) { return transform(d).y; });
     };
   };
 

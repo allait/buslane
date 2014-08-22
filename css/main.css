@@ -5,26 +5,14 @@ html, body, #map {
   padding: 0;
 }
 
-.stations, .stations svg {
-  position: absolute;
-}
-
-.stations svg {
-  width: 40px;
-  height: 40px;
-  padding-right: 100px;
-  font: 10px sans-serif;
-}
-
-.stations path {
+.route path {
   fill: none;
-  stroke: blue;
+  stroke: steelblue;
   stroke-width: 3px;
 }
 
-.stations circle {
+.route circle {
   fill: yellow;
   stroke: black;
   stroke-width: 1.5px;
 }
-
