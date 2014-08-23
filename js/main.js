@@ -7,6 +7,7 @@ var map = new google.maps.Map(d3.select("#map").node(), {
   disableDefaultUI: true,
   scrollwheel: false,
   disableDoubleClickZoom: true,
+  draggable: false,
 });
 
 d3.json("service1.json", function(data) {
