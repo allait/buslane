@@ -10,7 +10,7 @@ var map = new google.maps.Map(d3.select("#map").node(), {
   draggable: false,
 });
 
-d3.json("service1.json", function(data) {
+d3.json("data/" + window.location.hash.substring(1) + "_route.json", function (data) {
   var overlay = new google.maps.OverlayView();
 
   overlay.onAdd = function () {
