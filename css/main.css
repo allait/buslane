@@ -5,6 +5,12 @@ html, body, #map {
   padding: 0;
 }
 
+.overlay .clock {
+  fill: #eee;
+  stroke: #000;
+  stroke-width: 1px;
+}
+
 .route path {
   fill: none;
   stroke: steelblue;

@@ -12,12 +12,17 @@ var map = new google.maps.Map(d3.select("#map").node(), {
 d3.json("service1.json", function(data) {
   var overlay = new google.maps.OverlayView();
 
-  overlay.onAdd = function() {
+  overlay.onAdd = function () {
+    var adjTime = function (time) {
+      var total = 5 * 60 * 1000;
+      return (time / (24 * 60)) * total;
+    };
+
     var layer = d3.select(this.getPanes().overlayLayer)
                   .append("div").attr("class", "overlay")
                     .append("svg:svg");
 
-    overlay.draw = function() {
+    overlay.draw = function () {
       var projection = this.getProjection();
 
       var transform = function (d) {
@@ -26,7 +31,25 @@ d3.json("service1.json", function(data) {
         return d;
       };
 
-      var routes = layer.selectAll("div").data(data).enter()
+      var time = layer.append('svg:text')
+                      .attr('class', 'clock')
+                      .attr('x', '50%').attr('y', '100px').attr('font-size', "64px")
+                      .text("23:59");
+
+      time.transition().duration(adjTime(24 * 60))
+          .ease("linear")
+          .tween("text", function (d) {
+            var interpolate = d3.interpolate(1, 24 * 60);
+            var format = d3.format("02d");
+            return function (t) {
+              var time = interpolate(t);
+              var hours = Math.floor(time / 60) % 24;
+              var minutes = Math.floor(time % 60);
+              this.textContent = format(hours) + ':' + format(minutes);
+            };
+          });
+
+      var routes = layer.selectAll().data(data).enter()
                         .append("svg:g").attr("class", "route");
 
       var line = d3.svg.line()
