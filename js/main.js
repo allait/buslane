@@ -62,13 +62,6 @@ d3.json("data/" + window.location.hash.substring(1) + "_route.json", function (d
           .data(function (d) { return [d.points]; }).enter()
           .append("svg:path").attr("d", line);
 
-      var marker = routes.selectAll()
-          .data(function (d) { return d.points; })
-        .enter().append("svg:circle")
-          .attr("r", 3)
-          .attr("cx", function (d) { return transform(d).x; })
-          .attr("cy", function (d) { return transform(d).y; });
-
       var colors = d3.scale.category20();
       var buses = routes.selectAll().data(function (d, i) {
         d.buses.forEach(function (v) { v['route'] = i; });
