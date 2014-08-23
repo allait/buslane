@@ -53,8 +53,8 @@ d3.json("service1.json", function(data) {
                         .append("svg:g").attr("class", "route");
 
       var line = d3.svg.line()
-          .x(function(d) { return transform(d).x; })
-          .y(function(d) { return transform(d).y; })
+          .x(function (d) { return transform(d).x; })
+          .y(function (d) { return transform(d).y; })
           .interpolate("linear");
 
       var route_line = routes.selectAll()
@@ -67,6 +67,37 @@ d3.json("service1.json", function(data) {
           .attr("r", 3)
           .attr("cx", function (d) { return transform(d).x; })
           .attr("cy", function (d) { return transform(d).y; });
+
+      var colors = d3.scale.category20();
+      var buses = routes.selectAll().data(function (d, i) {
+        d.buses.forEach(function (v) { v['route'] = i; });
+        return d.buses;
+      }).enter()
+          .append("svg:circle")
+          .attr("r", 4)
+          .attr("fill", function (d, i) { return colors(d.route); })
+          .attr("class", "bus")
+          .attr("transform", function (d) {
+            return "translate(" + transform(d3.select(this.parentNode).datum().points[0]) + ")";
+          });
+
+      buses.transition()
+        .ease("linear")
+        .delay(function (d, i) {
+          return adjTime(d.start);
+        })
+        .duration(function (d, i) {
+          return adjTime(d.stop - d.start);
+        })
+        .attrTween("transform", function (d, i, a) {
+          var path = d3.select(this.parentNode).select('path')[0][0];
+          var l = path.getTotalLength();
+          return function (t) {
+            var p = path.getPointAtLength(t * l);
+            return "translate(" + p.x + "," + p.y + ")";
+          };
+        })
+        .transition().duration(2000).style("opacity", 0).remove();
     };
   };
 

@@ -13,12 +13,16 @@ html, body, #map {
 
 .route path {
   fill: none;
-  stroke: steelblue;
+  stroke: none;
   stroke-width: 3px;
 }
 
-.route circle {
-  fill: yellow;
+.route .bus {
   stroke: black;
+  stroke-width: 1.5px;
+}
+
+.route circle {
+  stroke: none;
   stroke-width: 1.5px;
 }
