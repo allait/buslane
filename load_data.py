@@ -1,71 +1,136 @@
-import itertools
+import datetime
 import json
 import os
+import sys
+from hashlib import md5
 
 import requests
-from lxml.html import fromstring
 
-SERVICES = [
-    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "14", "15",
-    "15A", "16", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27",
-    "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40",
-    "41", "42", "43", "44", "44A", "45", "47", "49", "61", "63", "67", "69",
-    "100", "113", "N3", "N11", "N16", "N22", "N25", "N26", "N30", "N31", "N34",
-    "N37", "N44", "X12", "X25", "X26", "X29", "X31", "X37", "X44",
-]
 
 CACHE_PATH = 'data/'
 
 
-class ServiceData(object):
-    cache_extension = 'txt'
+class BusTracker(object):
+    api_url = 'http://ws.mybustracker.co.uk/'
 
-    def __init__(self, service):
-        self.service = service
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self._services = None
 
-    def get(self):
-        cache_filename = '%s_%s.%s' % (
-            self.service, self.__class__.__name__.lower(), self.cache_extension
+    @property
+    def services(self):
+        # Yeah, this is I/O on attribute access, don't do this
+        if self._services is None:
+            self._services = self.get_services()
+
+        return self._services
+
+    @property
+    def key(self):
+        time_string = datetime.datetime.utcnow().strftime("%Y%m%d%H")
+        return md5(self.api_key + time_string).hexdigest()
+
+    def get(self, service):
+        routes = self.get_routes(service)
+        self.services[service]['routes'] = routes
+        return self.services[service]
+
+    def get_services(self):
+        services = {}
+        service_data = get_cached('services.json', self.request_services)
+        for service in service_data['services']:
+            services[service['mnemo']] = service
+
+        return services
+
+    def get_stops(self):
+        stops_data = get_cached('stops.json', self.request_stops)
+        return stops_data['busStops']
+
+    def get_destinations(self):
+        destinations = {}
+        dest_data = get_cached('destinations.json', self.request_destinations)
+        for dest in dest_data['dests']:
+            destinations[dest['ref']] = dest
+
+        return destinations
+
+    def get_routes(self, service):
+        return get_cached(
+            "%s_route.json" % (service),
+            self.request_routes,
+            service
         )
-        if not is_cached(cache_filename):
-            data = self.request()
-            save_data(data, cache_filename)
-        else:
-            data = read_data(cache_filename)
 
-        return self.parse(data)
+    def get_timetables(self, service, stop, destination=None, day=0, time=None):
+        # We care about the timetable weekday, not offset from today
+        # This is somewhat wrong, since day to day times might be different,
+        # but that doesn't really matter much in this case
+        weekday = (datetime.date.today() + datetime.timedelta(days=day)).weekday()
 
-    def request(self):
-        raise NotImplemented()
+        filename = "_".join(map(str, [
+            service,
+            "timetable",
+            stop,
+            destination,
+            weekday,
+            time
+        ]))
 
-    def parse(self, data):
-        return data
+        timetable = get_cached(
+            "%s.json" % filename,
+            self.request_timetables,
+            service, stop, destination, day, time
+        )
 
+        return timetable
 
-class Route(ServiceData):
-    cache_extension = 'json'
+    def request_services(self):
+        return self.call_api('getServices')
 
-    def request(self):
+    def request_stops(self):
+        return self.call_api('getBusStops')
+
+    def request_destinations(self):
+        return self.call_api('getDests')
+
+    def request_service_points(self, service):
+        service_ref = self.services[service]['ref']
+        return self.call_api('getServicePoints', {'ref': service_ref})
+
+    def request_routes(self, service):
         base_url = 'http://lothianbuses.com/tt/parse.php?service='
-        return requests.get(base_url + self.service).json()
+        return requests.get(base_url + service).json()
 
+    def request_timetables(self, service, stop, destination=None, day=0, time=None):
+        service_ref = self.services[service]['ref']
+        return self.call_api('getBusTimes', {
+            'stopId': stop,
+            'refService': service_ref,
+            'refDest': destination,
+            'time': time,
+            'day': day,
+            'nb': 10,
+        })
 
-class Timetable(ServiceData):
-    cache_extension = 'html'
+    def request_journey(self, stop, journey):
+        return self.call_api('getJourneyTimes', {
+            'stopId': stop,
+            'journeyId': journey,
+        })
 
-    def request(self):
-        base_url = 'http://lothianbuses.com/plan-a-journey/timetables/'
-        return requests.get(base_url + self.service).text
+    def call_api(self, function, params=None):
+        if params is None:
+            params = {}
+        else:
+            params = params.copy()
 
-    def parse(self, response):
-        doc = fromstring(response)
-        rows = [elem.xpath('./td//text()') for elem in doc.xpath('//table/tr')]
-        for row in rows:
-            times = filter(lambda x: x.isdigit(), map(lambda x: x.strip(), row[1:]))
-            if times:
-                print [row[0]] + times
-            else:
-                print "\n"
+        params.update({
+            'module': 'json',
+            'key': self.key,
+            'function': function,
+        })
+        return requests.get(self.api_url, params=params).json()
 
 
 def is_cached(filename):
@@ -82,23 +147,17 @@ def read_data(filename):
         return json.load(file)
 
 
-def all_routes():
-    service_routes = [Route(service).get() for service in SERVICES]
-    routes = []
-    for route in itertools.chain(*service_routes):
-        # Remove everything except point coordinates
-        route_data = {
-            'points': [{'lat': p['lat'], 'lng': p['lng']} for p in route['points']]
-        }
-        routes.append(route_data)
+def get_cached(filename, request_method, *args, **kwargs):
+    cache_filename = filename
+    if not is_cached(cache_filename):
+        data = request_method(*args, **kwargs)
+        save_data(data, cache_filename)
+    else:
+        data = read_data(cache_filename)
 
-    save_data(routes, 'all_route.json')
-    return routes
+    return data
 
 
 if __name__ == '__main__':
-    routes = Route("30").get()
-    for off, route in enumerate(routes):
-        # Placeholder times
-        route['buses'] = [{'start': i + 5 * off, 'stop': i + 5 * off + 60} for i in range(0, 24 * 60, 15)]
-    save_data(routes, '30t_route.json')
+    api_key = sys.argv[1]
+    print BusTracker(api_key=api_key).get("38")
