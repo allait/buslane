@@ -40,8 +40,11 @@ class BusTracker(object):
         return routes
 
     def get(self, service):
-        routes = self.get_routes(service)
-        timetables, bus_routes = [], []
+        try:
+            routes = self.get_routes(service)
+        except ValueError:
+            return []
+        timetables, bus_routes = {}, []
         for route in routes:
             stops = filter(lambda x: 'code' in x, route['points'])
             start, stop = stops[0]['code'], stops[-1]['code']
@@ -51,11 +54,23 @@ class BusTracker(object):
             # but slightly different service points along the way.
             # This leads to multiple buses starting at the same time.
             # Since there's no easy way to separate timetables between these subroutes,
-            # we'll just drop routes with times we've seen before
-            if times not in timetables:
-                route['buses'] = map(rel_time, times)
-                timetables.append(times)
-                bus_routes.append(route)
+            # we'll just drop routes with start and end times we've seen before
+            if 'start_' + start not in timetables:
+                timetables['start_' + start] = set()
+            if 'stop_' + stop not in timetables:
+                timetables['stop_' + stop] = set()
+
+            times = [
+                t for t in times
+                if (t['start'] not in timetables['start_' + start])
+                and (t['stop'] not in timetables['stop_' + stop])
+            ]
+
+            timetables['start_' + start] = [t['start'] for t in times]
+            timetables['stop_' + start] = [t['stop'] for t in times]
+
+            route['buses'] = times
+            bus_routes.append(route)
 
         return bus_routes
 
@@ -77,14 +92,19 @@ class BusTracker(object):
     def get_full_timetable(self, service, start, stop):
         time = 0
         times = []
+        errors = 0
         # Would you look at that, a while loop in python
         while (time < 2400):
             timetable = self.get_timetables(service, start, stop, "%04d" % time)
             if timetable:
-                times.extend(timetable)
-                if int(timetable[0]['start']) < time:
+                if (int(timetable[0]['start']) < time) and (errors < 3):
+                    errors += 1
                     drop_cache("_".join([service, start, stop, "%04d" % time, 'timetable.html']))
+                elif errors >= 3:
+                    time += 200
                 else:
+                    errors = 0
+                    times.extend(timetable)
                     time = int(timetable[-1]['start'])
             else:
                 time += 200
@@ -180,10 +200,6 @@ def get_cached(filename, request_method, *args, **kwargs):
         data = read_data(cache_filename)
 
     return data
-
-
-def rel_time(bus_time):
-    return dict([(k, ((int(v) / 100) * 60 + int(v) % 100)) for k, v in bus_time.items()])
 
 
 if __name__ == '__main__':
