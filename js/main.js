@@ -13,10 +13,22 @@ var map = new google.maps.Map(d3.select("#map").node(), {
 d3.json("data/" + window.location.hash.substring(1) + ".json", function (data) {
   var overlay = new google.maps.OverlayView();
 
+  var startHour = 10;
+  var timelapseMinutes = 5;
+
   overlay.onAdd = function () {
     var adjTime = function (time) {
-      var total = 5 * 60 * 1000;
+      var total = timelapseMinutes * 60 * 1000;
       return (time / (24 * 60)) * total;
+    };
+
+    var timeOffset = function (time) {
+      var relativeTime = (Math.floor(time / 100) * 60 + (time % 100));
+      var otime = relativeTime - (startHour * 60);
+      if (otime < 0) {
+        otime += 24 * 60;  // move time to after midnight
+      }
+      return otime;
     };
 
     var layer = d3.select(this.getPanes().overlayLayer)
@@ -40,11 +52,11 @@ d3.json("data/" + window.location.hash.substring(1) + ".json", function (data) {
       time.transition().duration(adjTime(24 * 60))
           .ease("linear")
           .tween("text", function (d) {
-            var interpolate = d3.interpolate(1, 24 * 60);
+            var interpolate = d3.interpolate(0, 24 * 60);
             var format = d3.format("02d");
             return function (t) {
               var time = interpolate(t);
-              var hours = Math.floor(time / 60) % 24;
+              var hours = (Math.floor(time / 60) + startHour) % 24;
               var minutes = Math.floor(time % 60);
               this.textContent = format(hours) + ':' + format(minutes);
             };
@@ -78,10 +90,10 @@ d3.json("data/" + window.location.hash.substring(1) + ".json", function (data) {
       buses.transition()
         .ease("linear")
         .delay(function (d, i) {
-          return adjTime(d.start);
+          return adjTime(timeOffset(d.start));
         })
         .duration(function (d, i) {
-          return adjTime(d.stop - d.start);
+          return adjTime(timeOffset(d.stop) - timeOffset(d.start));
         })
         .attrTween("transform", function (d, i, a) {
           var path = d3.select(this.parentNode).select('path')[0][0];
