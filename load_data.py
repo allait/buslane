@@ -39,7 +39,7 @@ class BusTracker(object):
         routes = []
         for service in self.services:
             service_routes = self.get(service)
-            save_data(service_routes, "%s.json" % service)
+            self.services[service]['routes'] = service_routes
             routes.extend(service_routes)
 
         return routes
@@ -60,7 +60,7 @@ class BusTracker(object):
 
     def get_services(self):
         services = {}
-        service_data = get_cached('services.json', self.request_services)
+        service_data = get_cached('getServices.json', self.request_services)
         for service in service_data['services']:
             services[service['mnemo']] = service
 
@@ -277,5 +277,18 @@ def compress_routes(routes):
 if __name__ == '__main__':
     api_key = sys.argv[1]
 
-    services = BusTracker(api_key=api_key)
-    save_data(compress_routes(services.get_all()), 'all.json')
+    bustracker = BusTracker(api_key=api_key)
+
+    all_routes = bustracker.get_all()
+
+    active_services = []
+    for service in bustracker.services.values():
+        service_routes = compress_routes(service['routes'])
+        if service_routes:
+            save_data(service_routes, '%s.json' % service['mnemo'])
+            active_services.append({'name': service['name'], 'mnemo': service['mnemo']})
+
+    active_services.sort(key=lambda x: int(x['mnemo']) if x['mnemo'].isdigit() else x['mnemo'])
+
+    save_data(compress_routes(all_routes), 'all.json')
+    save_data(active_services, 'services.json')
