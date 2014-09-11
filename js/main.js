@@ -17,9 +17,12 @@ var drawOverlay = function (data, startHour, timelapseMinutes) {
     return (time / (24 * 60)) * total;
   };
 
+  var relativeTime = function (time) {
+    return (Math.floor(time / 100) * 60 + (time % 100));
+  };
+
   var timeOffset = function (time) {
-    var relativeTime = (Math.floor(time / 100) * 60 + (time % 100));
-    var otime = relativeTime - (startHour * 60);
+    var otime = relativeTime(time) - (startHour * 60);
     if (otime < 0) {
       otime += 24 * 60;  // move time to after midnight
     }
@@ -87,7 +90,7 @@ var drawOverlay = function (data, startHour, timelapseMinutes) {
           .attr("class", "bus");
       })
       .duration(function (d, i) {
-        return adjTime(timeOffset(d.stop) - timeOffset(d.start));
+        return adjTime(relativeTime(d.stop) - relativeTime(d.start));
       })
       .attrTween("transform", function (d, i, a) {
         var path = d3.select(this.parentNode).select('path')[0][0];
