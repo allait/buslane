@@ -1,9 +1,12 @@
 import datetime
 import json
+import itertools
 import os
 import sys
-from time import sleep
+
+from collections import defaultdict
 from hashlib import md5
+from time import sleep
 
 import requests
 from lxml.html import fromstring
@@ -35,7 +38,9 @@ class BusTracker(object):
     def get_all(self):
         routes = []
         for service in self.services:
-            routes.extend(self.get(service))
+            service_routes = self.get(service)
+            save_data(service_routes, "%s.json" % service)
+            routes.extend(service_routes)
 
         return routes
 
@@ -44,35 +49,14 @@ class BusTracker(object):
             routes = self.get_routes(service)
         except ValueError:
             return []
-        timetables, bus_routes = {}, []
+
         for route in routes:
-            stops = filter(lambda x: 'code' in x, route['points'])
-            start, stop = stops[0]['code'], stops[-1]['code']
-            times = self.get_full_timetable(service, start, stop)
-
-            # Some routes have duplicates: same start and destination stops
-            # but slightly different service points along the way.
-            # This leads to multiple buses starting at the same time.
-            # Since there's no easy way to separate timetables between these subroutes,
-            # we'll just drop routes with start and end times we've seen before
-            if 'start_' + start not in timetables:
-                timetables['start_' + start] = set()
-            if 'stop_' + stop not in timetables:
-                timetables['stop_' + stop] = set()
-
-            times = [
-                t for t in times
-                if (t['start'] not in timetables['start_' + start])
-                and (t['stop'] not in timetables['stop_' + stop])
-            ]
-
-            timetables['start_' + start] = [t['start'] for t in times]
-            timetables['stop_' + start] = [t['stop'] for t in times]
+            start, stop = get_route_endpoints(route)
+            times = self.get_full_timetable(service, start['code'], stop['code'])
 
             route['buses'] = times
-            bus_routes.append(route)
 
-        return bus_routes
+        return drop_duplicates(routes)
 
     def get_services(self):
         services = {}
@@ -163,6 +147,8 @@ class BusTracker(object):
         return requests.get(self.api_url, params=params).json()
 
 
+# Cache utils
+
 def is_cached(filename):
     return os.path.exists(CACHE_PATH + filename)
 
@@ -202,6 +188,94 @@ def get_cached(filename, request_method, *args, **kwargs):
     return data
 
 
+# Route utils
+
+def drop_duplicates(routes):
+    """Removes duplicate bus times from service routes.
+
+    Some routes are a part of a larger service route, which means that
+    some buses are added multiple times. In order to remove these duplicates
+    we find the longest route for each start and stop time.
+
+    """
+
+    stop_routes = defaultdict(list), defaultdict(list)
+
+    for index, kind in ((0, 'start'), (1, 'stop')):
+        stop_routes = defaultdict(list)
+        for route in routes:
+            stop = get_route_endpoints(route)[index]
+            stop_routes[stop['code']].append(route)
+
+        for route_list in stop_routes.values():
+            if len(route_list) <= 1:
+                continue
+            for r1, r2 in itertools.combinations(route_list, 2):
+                if is_subroute(r1, r2):
+                    parent, subroute = r2, r1
+                elif is_subroute(r2, r1):
+                    parent, subroute = r1, r2
+                else:
+                    continue
+                subroute['buses'] = unique_times(subroute['buses'], parent['buses'], kind)
+
+    return routes
+
+
+def unique_times(subroute_buses, route_buses, time_key):
+    """Removes entries from subroute_buses which exist in route_buses.
+
+    Returns a new list with duplicates removed.
+    Uses entry[time_key] for comparison.
+
+    """
+
+    route_times = set(bus[time_key] for bus in route_buses)
+    return [bus for bus in subroute_buses if bus[time_key] not in route_times]
+
+
+def get_route_endpoints(route):
+    stops = get_route_stops(route)
+    return stops[0], stops[-1]
+
+
+def get_route_stops(route):
+    return filter(lambda x: 'code' in x, route['points'])
+
+
+def is_subroute(rA, rB):
+    """Returns True if rA is a subroute of rB.
+
+    Route A is considered a subroute if it's start and end stops are
+    also stops of route B.
+
+    """
+
+    rA_stops = set(s['code'] for s in get_route_endpoints(rA))
+    rB_stops = set(s['code'] for s in get_route_stops(rB))
+
+    return rA_stops.issubset(rB_stops)
+
+
+def compress_routes(routes):
+    """Drops non-essential data to reduce route file size."""
+
+    remaining_routes = []
+
+    for route in routes:
+        # Don't keep routes without any scheduled buses
+        if not route['buses']:
+            continue
+        # Remove all points data except stop coordinates
+        route['points'] = [{'lat': p['lat'], 'lng': p['lng']} for p in route['points']]
+
+        remaining_routes.append(route)
+
+    return remaining_routes
+
+
 if __name__ == '__main__':
     api_key = sys.argv[1]
-    save_data(BusTracker(api_key=api_key).get_all(), 'all.json')
+
+    services = BusTracker(api_key=api_key)
+    save_data(compress_routes(services.get_all()), 'all.json')
