@@ -5,9 +5,18 @@ html, body, #map {
   padding: 0;
 }
 
+.controls {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+}
+
 .overlay .clock {
-  fill: #eee;
-  stroke: #000;
+  font-family: sans-serif;
+  font-weight: bold;
+  fill: rgba(255, 255, 255, 0.5);
+  stroke: none;
   stroke-width: 1px;
 }
 
