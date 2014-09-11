@@ -102,9 +102,9 @@ var drawOverlay = function (data, startHour, timelapseMinutes) {
 };
 
 var loadData = function (params) {
-  var service = params['service'],
-      startHour = parseInt(params['start'], 10) || 0,
-      timelapseMinutes = parseInt(params['duration'], 10) || 0;
+  var service = params.service,
+      startHour = parseInt(params.start, 10) || 0,
+      timelapseMinutes = parseInt(params.duration, 10) || 0;
 
   var overlay = new google.maps.OverlayView();
 
@@ -125,7 +125,10 @@ var loadData = function (params) {
 var initialize = function () {
   var start = 18;
   var duration = 2;
-  var params = $.deparam.fragment() || {service: "1", start: 10, duration: 10};
+  var params = $.deparam.fragment();
+  if ($.isEmptyObject(params)) {
+    params = {service: "1", start: 12, duration: 10};
+  }
 
   $.getJSON('data/services.json').done(function (data) {
     d3.select('#service').selectAll().data(data)
