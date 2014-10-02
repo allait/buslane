@@ -12,6 +12,12 @@ html, body, #map {
   z-index: 2;
 }
 
+
+.overlay, .overlay svg {
+  height: 100vh;
+  width: 100%;
+}
+
 .overlay .clock {
   font-family: sans-serif;
   font-weight: bold;
